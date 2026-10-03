@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Min Klimastation</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; text-align: center; color: #333; }
+    
+    .cards { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 160px; }
+    .card h3 { margin: 0 0 10px 0; font-size: 1.1em; color: #666; }
+    .val { font-size: 2.2em; font-weight: bold; color: #2c3e50; }
+    
+    .settings-card { background: white; padding: 20px; border-radius: 12px; max-width: 800px; margin: 0 auto 30px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    .input-group { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; align-items: center; margin-bottom: 15px; }
+    .input-group label { display: flex; flex-direction: column; font-size: 0.9em; text-align: left; font-weight: bold; color: #555; }
+    .input-group input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; width: 100px; margin-top: 5px; font-size: 1em; }
+    
+    button { padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; margin-bottom: 15px; }
+    button:hover { background: #c0392b; }
+    
+    .slider-container { margin-top: 15px; padding-top: 15px; border-top: 1px solid #eaeaea; }
+    .slider-container input[type="range"] { width: 80%; max-width: 400px; margin-top: 15px; cursor: pointer; }
+    
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: auto; }
+    /* Vi ændrer musen til et 'kryds', når man holder over grafen for at invitere til markering */
+    .chart-box canvas { cursor: crosshair; }
+    .chart-box { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+    .avg-results { display: none; justify-content: center; gap: 30px; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e1e4e8; flex-wrap: wrap; }
+    .avg-item { display: flex; flex-direction: column; align-items: center; }
+    .avg-item span.lbl { font-size: 0.9em; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+    .avg-item span.v { font-size: 1.5em; font-weight: bold; color: #2c3e50; }
+  </style>
+</head>
+<body>
+
+  <h1>Indeklima Dashboard</h1>
+  
+  <!-- Live Data -->
+  <div class="cards">
+    <div class="card"><h3>CO2 Niveau</h3><div class="val" id="co2-val">-- ppm</div></div>
+    <div class="card"><h3>Temperatur</h3><div class="val" id="temp-val">-- &deg;C</div></div>
+    <div class="card"><h3>Luftfugtighed</h3><div class="val" id="hum-val">-- %</div></div>
+  </div>
+
+  <!-- Kontrolpanel -->
+  <div class="settings-card">
+    <h3>Alarm Indstillinger</h3>
+    <div class="input-group" style="margin-bottom: 5px;">
+      <label>Max CO2 (ppm)<input type="number" id="max-co2" value="1000"></label>
+      <label>Max Temp (°C)<input type="number" id="max-temp" value="25"></label>
+      <label>Max Fugt (%)<input type="number" id="max-hum" value="65"></label>
+      <label>Tid over grænse (min)<input type="number" id="time-limit" value="5"></label>
+    </div>
+    <button onclick="requestPermissions()">Tillad Notifikationer</button>
+
+    <!-- Tids-Slider -->
+    <div class="slider-container">
+      <h3 style="margin-bottom: 5px;">Graf Historik</h3>
+      <label style="font-weight: bold; color: #555;">
+        Viser data for de seneste <span id="hours-display" style="color: #3498db; font-size: 1.2em;">4 timer</span>
+      </label>
+      <br>
+      <input type="range" id="time-slider" min="0" max="19" value="3">
+    </div>
+  </div>
+
+  <!-- Gennemsnitsberegner (Visuel drag-and-drop info) -->
+  <div class="settings-card">
+    <h3>Beregn Gennemsnit</h3>
+    <p style="color: #666; font-size: 0.95em; margin-bottom: 10px;">
+      Markér et område direkte på en af graferne nedenfor (klik og træk med musen) for at se gennemsnittet for det interval. 
+      <br><span style="font-size: 0.85em;">(Klik én gang på grafen for at fjerne markeringen igen).</span>
+    </p>
+    
+    <div id="calc-status" style="font-size: 0.9em; color: #3498db; margin-bottom: 5px;">Klar til markering...</div>
+    
+    <div class="avg-results" id="avg-results">
+      <div class="avg-item"><span class="lbl">CO2</span><span class="v" id="avg-co2">-- ppm</span></div>
+      <div class="avg-item"><span class="lbl">Temp</span><span class="v" id="avg-temp">-- °C</span></div>
+      <div class="avg-item"><span class="lbl">Fugt</span><span class="v" id="avg-hum">-- %</span></div>
+    </div>
+  </div>
+
+  <!-- Grafer -->
+  <div class="charts-grid">
+    <div class="chart-box"><canvas id="co2Chart"></canvas></div>
+    <div class="chart-box"><canvas id="tempChart"></canvas></div>
+    <div class="chart-box"><canvas id="humChart"></canvas></div>
+  </div>
+
+  <script>
+    // 1. Firebase Opsætning
+    const firebaseConfig = {
+      apiKey: "AIzaSyCqEJ5yRtTB1KjAG0RmnEsDNiXFJBKwUxo",
+      authDomain: "tempco2fugt.firebaseapp.com",
+      databaseURL: "https://tempco2fugt-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "tempco2fugt",
+      storageBucket: "tempco2fugt.firebasestorage.app",
+      messagingSenderId: "1068932962336",
+      appId: "1:1068932962336:web:5442d05b09244c2f5a4445",
+      measurementId: "G-RS8FZC7W4Z"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Slet alt data ældre end 7 dage automatisk
+    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    db.ref('klima').orderByChild('timestamp').endAt(oneWeekAgo).once('value', (snapshot) => {
+      snapshot.forEach((child) => child.ref.remove());
+    });
+
+    // 2. Notifikations-logik
+    function requestPermissions() {
+      if (!("Notification" in window)) alert("Din browser understøtter ikke notifikationer.");
+      else Notification.requestPermission().then(p => { if (p === "granted") alert("Aktivt!"); });
+    }
+
+    let exceedStart = { co2: null, temp: null, hum: null };
+    let hasNotified = { co2: false, temp: false, hum: false };
+
+    function checkAlarm(type, currentValue, maxLimit, timeLimitMin, timestamp, unit) {
+      if (currentValue > maxLimit) {
+        if (exceedStart[type] === null) exceedStart[type] = timestamp;
+        else {
+          let mins = (timestamp - exceedStart[type]) / 60000;
+          if (mins >= timeLimitMin && !hasNotified[type]) {
+            if (Notification.permission === "granted") new Notification(`Alarm: Høj ${type}!`, { body: `Målingen over ${maxLimit} ${unit} i over ${timeLimitMin} min. Nu: ${currentValue} ${unit}.`});
+            hasNotified[type] = true;
+          }
+        }
+      } else { exceedStart[type] = null; hasNotified[type] = false; }
+    }
+
+    // 3. Custom Chart.js Plugin til at tegne den blå markering
+    const selectionBoxPlugin = {
+      id: 'selectionBox',
+      afterDraw(chart) {
+        if (chart.selection && chart.selection.startX !== chart.selection.endX) {
+          const ctx = chart.ctx;
+          const yTop = chart.chartArea.top;
+          const yBottom = chart.chartArea.bottom;
+          const x1 = Math.min(chart.selection.startX, chart.selection.endX);
+          const x2 = Math.max(chart.selection.startX, chart.selection.endX);
+
+          // Sørg for at den blå boks ikke tegnes uden for selve grafens gitter
+          const drawX1 = Math.max(x1, chart.chartArea.left);
+          const drawX2 = Math.min(x2, chart.chartArea.right);
+
+          if (drawX2 > drawX1) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(52, 152, 219, 0.3)'; // Lyseblå gennemsigtig farve
+            ctx.fillRect(drawX1, yTop, drawX2 - drawX1, yBottom - yTop);
+            ctx.restore();
+          }
+        }
+      }
+    };
+
+    function createChart(ctx, label, color) {
+      return new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: label, data: [], borderColor: color, backgroundColor: color + '33', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
+        options: { responsive: true, animation: false, scales: { y: { beginAtZero: false } } },
+        plugins: [selectionBoxPlugin] // Tilføj vores nye tegne-værktøj
+      });
+    }
+
+    const co2Chart = createChart(document.getElementById('co2Chart').getContext('2d'), 'CO2 (ppm)', '#e74c3c');
+    const tempChart = createChart(document.getElementById('tempChart').getContext('2d'), 'Temperatur (°C)', '#3498db');
+    const humChart = createChart(document.getElementById('humChart').getContext('2d'), 'Luftfugtighed (%)', '#2ecc71');
+
+    // 4. Logik for træk-og-slip udregning
+    function calculateAverageFromSelection(activeChart) {
+      if (!activeChart.selection) return;
+
+      const scale = activeChart.scales.x;
+      const x1 = Math.min(activeChart.selection.startX, activeChart.selection.endX);
+      const x2 = Math.max(activeChart.selection.startX, activeChart.selection.endX);
+
+      // Hvis brugeren bare klikkede (næsten ingen bredde på boksen), rydder vi markeringen
+      if (Math.abs(x2 - x1) < 10) {
+        [co2Chart, tempChart, humChart].forEach(c => { c.selection = null; c.update('none'); });
+        document.getElementById('avg-results').style.display = "none";
+        document.getElementById('calc-status').innerText = "Klar til markering...";
+        return;
+      }
+
+      // Oversæt pixels til data-indeks (hvor i rækken af målinger er vi?)
+      const startIndex = Math.max(0, Math.floor(scale.getValueForPixel(x1)));
+      const endIndex = Math.min(activeChart.data.labels.length - 1, Math.ceil(scale.getValueForPixel(x2)));
+
+      if (startIndex <= endIndex && endIndex >= 0) {
+        let sumCo2 = 0, sumTemp = 0, sumHum = 0;
+        let count = endIndex - startIndex + 1;
+
+        // Læg alle valgte målinger sammen
+        for (let i = startIndex; i <= endIndex; i++) {
+          sumCo2 += co2Chart.data.datasets[0].data[i] || 0;
+          sumTemp += tempChart.data.datasets[0].data[i] || 0;
+          sumHum += humChart.data.datasets[0].data[i] || 0;
+        }
+
+        // Vis resultatet
+        document.getElementById('avg-co2').innerText = Math.round(sumCo2 / count) + " ppm";
+        document.getElementById('avg-temp').innerText = (sumTemp / count).toFixed(1) + " °C";
+        document.getElementById('avg-hum').innerText = Math.round(sumHum / count) + " %";
+        
+        document.getElementById('calc-status').innerText = `Beregnet ud fra ${count} målinger i det valgte område.`;
+        document.getElementById('avg-results').style.display = "flex";
+        
+        // Kopier den lyseblå boks til de to andre grafer, så de synkroniserer
+        [co2Chart, tempChart, humChart].forEach(c => {
+          if (c !== activeChart) {
+            c.selection = { startX: activeChart.selection.startX, endX: activeChart.selection.endX };
+            c.update('none');
+          }
+        });
+      }
+    }
+
+    // Gør lærredet i stand til at lytte efter mus og fingre
+    function setupDragSelection(canvasId, chartObj) {
+      const canvas = document.getElementById(canvasId);
+      let isDragging = false;
+
+      const startDrag = (e) => {
+        isDragging = true;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const startX = clientX - rect.left;
+        chartObj.selection = { startX: startX, endX: startX };
+      };
+
+      const doDrag = (e) => {
+        if (!isDragging) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        chartObj.selection.endX = clientX - rect.left;
+        chartObj.update('none');
+      };
+
+      const endDrag = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        chartObj.update('none');
+        calculateAverageFromSelection(chartObj);
+      };
+
+      canvas.addEventListener('mousedown', startDrag);
+      canvas.addEventListener('mousemove', doDrag);
+      canvas.addEventListener('mouseup', endDrag);
+      canvas.addEventListener('mouseleave', endDrag); // Sørg for at den stopper, hvis musen kører udenfor
+
+      canvas.addEventListener('touchstart', startDrag, {passive: true});
+      canvas.addEventListener('touchmove', doDrag, {passive: true});
+      canvas.addEventListener('touchend', endDrag);
+    }
+
+    setupDragSelection('co2Chart', co2Chart);
+    setupDragSelection('tempChart', tempChart);
+    setupDragSelection('humChart', humChart);
+
+    // 5. Data Håndtering & Slider Logik
+    let currentListener = null;
+    let updateTimeout;
+
+    function debouncedUpdate() {
+      clearTimeout(updateTimeout);
+      updateTimeout = setTimeout(() => { co2Chart.update('none'); tempChart.update('none'); humChart.update('none'); }, 100);
+    }
+
+    const sliderSteps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36, 48, 72, 96, 120, 144, 168];
+
+    function formatTimeLabel(h) {
+      if (h === 24) return "1 døgn";
+      if (h === 36) return "1,5 døgn";
+      if (h >= 48) return (h / 24) + " døgn";
+      return h + " timer";
+    }
+
+    function loadData(hours) {
+      if (currentListener) db.ref('klima').off('child_added', currentListener);
+
+      co2Chart.data.labels = []; co2Chart.data.datasets[0].data = [];
+      tempChart.data.labels = []; tempChart.data.datasets[0].data = [];
+      humChart.data.labels = []; humChart.data.datasets[0].data = [];
+      
+      // Ryd eventuelle markeringer, når ny tid vælges
+      [co2Chart, tempChart, humChart].forEach(c => { c.selection = null; });
+      document.getElementById('avg-results').style.display = "none";
+      document.getElementById('calc-status').innerText = "Klar til markering...";
+
+      const startTime = Date.now() - (hours * 60 * 60 * 1000);
+
+      currentListener = db.ref('klima').orderByChild('timestamp').startAt(startTime).on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        
+        document.getElementById('co2-val').innerText = data.co2 + " ppm";
+        document.getElementById('temp-val').innerText = parseFloat(data.temperatur).toFixed(1) + " °C";
+        document.getElementById('hum-val').innerText = Math.round(data.luftfugtighed) + " %";
+
+        checkAlarm('CO2', data.co2, parseFloat(document.getElementById('max-co2').value), parseFloat(document.getElementById('time-limit').value), data.timestamp, 'ppm');
+        checkAlarm('Temperatur', data.temperatur, parseFloat(document.getElementById('max-temp').value), parseFloat(document.getElementById('time-limit').value), data.timestamp, '°C');
+        checkAlarm('Luftfugtighed', data.luftfugtighed, parseFloat(document.getElementById('max-hum').value), parseFloat(document.getElementById('time-limit').value), data.timestamp, '%');
+
+        const date = new Date(data.timestamp);
+        let timeStr = date.getHours().toString().padStart(2, '0') + ":" + date.getMinutes().toString().padStart(2, '0');
+        if (hours >= 24) timeStr = date.getDate() + "/" + (date.getMonth() + 1) + " " + timeStr;
+
+        co2Chart.data.labels.push(timeStr); co2Chart.data.datasets[0].data.push(data.co2);
+        tempChart.data.labels.push(timeStr); tempChart.data.datasets[0].data.push(data.temperatur);
+        humChart.data.labels.push(timeStr); humChart.data.datasets[0].data.push(data.luftfugtighed);
+
+        const maxPoints = hours * 60; 
+        if (co2Chart.data.labels.length > maxPoints) {
+          co2Chart.data.labels.shift(); co2Chart.data.datasets[0].data.shift();
+          tempChart.data.labels.shift(); tempChart.data.datasets[0].data.shift();
+          humChart.data.labels.shift(); humChart.data.datasets[0].data.shift();
+        }
+
+        debouncedUpdate();
+      });
+    }
+
+    const timeSlider = document.getElementById('time-slider');
+    timeSlider.addEventListener('input', (e) => {
+      document.getElementById('hours-display').innerText = formatTimeLabel(sliderSteps[e.target.value]);
+    });
+    timeSlider.addEventListener('change', (e) => {
+      loadData(sliderSteps[e.target.value]);
+    });
+
+    loadData(4);
+  </script>
+</body>
+</html>
