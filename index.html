@@ -13,9 +13,14 @@
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; text-align: center; color: #333; }
     
     .cards { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 160px; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 160px; display: flex; flex-direction: column; justify-content: center;}
     .card h3 { margin: 0 0 10px 0; font-size: 1.1em; color: #666; }
     .val { font-size: 2.2em; font-weight: bold; color: #2c3e50; }
+    
+    /* Fremhævede kort til udendørs data og anbefalinger */
+    .card.outdoor { background: #e3f2fd; border: 1px solid #bbdefb; }
+    .card.recommended { background: #e8f5e9; border: 1px solid #c8e6c9; }
+    .card.recommended .val { font-size: 1.8em; color: #2e7d32; }
     
     .settings-card { background: white; padding: 20px; border-radius: 12px; max-width: 800px; margin: 0 auto 30px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     .input-group { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; align-items: center; margin-bottom: 15px; }
@@ -25,29 +30,86 @@
     button { padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; margin-bottom: 15px; }
     button:hover { background: #c0392b; }
     
-    .slider-container { margin-top: 15px; padding-top: 15px; border-top: 1px solid #eaeaea; }
-    .slider-container input[type="range"] { width: 80%; max-width: 400px; margin-top: 15px; cursor: pointer; }
+    /* Nyt samlet design til Dashboard */
+    .dashboard-core { background: white; border-radius: 12px; padding: 25px; max-width: 1200px; margin: 0 auto 30px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    
+    .slider-container { margin-bottom: 20px; }
+    .large-slider { -webkit-appearance: none; width: 100%; max-width: 600px; height: 8px; background: #e1e4e8; border-radius: 4px; outline: none; margin: 20px auto 10px auto; display: block; }
+    .large-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #3498db; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.2s; }
+    .large-slider::-webkit-slider-thumb:hover { background: #2980b9; transform: scale(1.1); }
+    .large-slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #3498db; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); border: none; transition: 0.2s; }
+    .large-slider::-moz-range-thumb:hover { background: #2980b9; transform: scale(1.1); }
     
     .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: auto; }
-    /* Vi ændrer musen til et 'kryds', når man holder over grafen for at invitere til markering */
     .chart-box canvas { cursor: crosshair; }
     .chart-box { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 
-    .avg-results { display: none; justify-content: center; gap: 30px; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e1e4e8; flex-wrap: wrap; }
-    .avg-item { display: flex; flex-direction: column; align-items: center; }
-    .avg-item span.lbl { font-size: 0.9em; color: #666; text-transform: uppercase; letter-spacing: 1px; }
-    .avg-item span.v { font-size: 1.5em; font-weight: bold; color: #2c3e50; }
+    /* Integreret gennemsnits bar */
+    .avg-container { display: flex; align-items: center; justify-content: center; min-height: 50px; margin-bottom: 20px; background: #f8f9fa; border-radius: 8px; padding: 10px 20px; border: 1px solid #e1e4e8; }
+    .avg-results { display: none; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: center; }
+    .avg-title { font-weight: bold; color: #34495e; padding-right: 15px; border-right: 2px solid #ddd; }
+    .avg-item { display: flex; align-items: baseline; gap: 6px; }
+    .avg-item span.lbl { font-size: 0.85em; color: #666; text-transform: uppercase; font-weight: 600; }
+    .avg-item span.v { font-size: 1.3em; font-weight: bold; color: #2c3e50; }
+    
+    @media (max-width: 600px) {
+      .avg-title { border-right: none; padding-right: 0; border-bottom: 2px solid #ddd; padding-bottom: 5px; width: 100%; text-align: center; }
+    }
   </style>
 </head>
 <body>
 
   <h1>Indeklima Dashboard</h1>
   
-  <!-- Live Data -->
+  <!-- Live Data & Udendørs Info -->
   <div class="cards">
     <div class="card"><h3>CO2 Niveau</h3><div class="val" id="co2-val">-- ppm</div></div>
-    <div class="card"><h3>Temperatur</h3><div class="val" id="temp-val">-- &deg;C</div></div>
-    <div class="card"><h3>Luftfugtighed</h3><div class="val" id="hum-val">-- %</div></div>
+    <div class="card"><h3>Temp (Inde)</h3><div class="val" id="temp-val">-- &deg;C</div></div>
+    <div class="card"><h3>Fugt (Inde)</h3><div class="val" id="hum-val">-- %</div></div>
+    
+    <!-- Nye kort til udendørs API data og anbefalet RF -->
+    <div class="card outdoor">
+      <h3>Udendørs Temp</h3>
+      <div class="val" id="out-temp-val">-- &deg;C</div>
+      <div style="font-size: 0.7em; color: #555; margin-top: 5px;">Kilde: Yr.no/Meteo</div>
+    </div>
+    <div class="card recommended">
+      <h3>Anbefalet Indefugt</h3>
+      <div class="val" id="rec-hum-val">-- %</div>
+      <div style="font-size: 0.7em; color: #555; margin-top: 5px;" id="rec-hum-reason">Beregner...</div>
+    </div>
+  </div>
+
+  <!-- NY: Integreret Dashboard Core (Slider, Gennemsnit & Grafer) -->
+  <div class="dashboard-core">
+    
+    <!-- Tids-Slider -->
+    <div class="slider-container">
+      <label style="font-size: 1.1em; font-weight: bold; color: #555;">
+        Viser historik for de seneste <span id="hours-display" style="color: #3498db; font-size: 1.3em;">4 timer</span>
+      </label>
+      <input type="range" id="time-slider" min="0" max="19" value="3" class="large-slider">
+    </div>
+
+    <!-- Integreret Gennemsnitsvisning -->
+    <div class="avg-container">
+      <div id="calc-status" style="color: #7f8c8d; font-size: 0.95em;">Markér et område direkte på en graf (klik og træk) for at se gennemsnittet for intervallet.</div>
+      
+      <div class="avg-results" id="avg-results">
+        <div class="avg-title">Gennemsnit for markering</div>
+        <div class="avg-item"><span class="lbl">CO2:</span><span class="v" id="avg-co2">-- ppm</span></div>
+        <div class="avg-item"><span class="lbl">Temp:</span><span class="v" id="avg-temp">-- °C</span></div>
+        <div class="avg-item"><span class="lbl">Fugt:</span><span class="v" id="avg-hum">-- %</span></div>
+      </div>
+    </div>
+
+    <!-- Grafer -->
+    <div class="charts-grid" style="box-shadow: none; max-width: 100%;">
+      <div class="chart-box" style="box-shadow: none; border: 1px solid #eee;"><canvas id="co2Chart"></canvas></div>
+      <div class="chart-box" style="box-shadow: none; border: 1px solid #eee;"><canvas id="tempChart"></canvas></div>
+      <div class="chart-box" style="box-shadow: none; border: 1px solid #eee;"><canvas id="humChart"></canvas></div>
+    </div>
+    
   </div>
 
   <!-- Kontrolpanel -->
@@ -59,45 +121,10 @@
       <label>Max Fugt (%)<input type="number" id="max-hum" value="65"></label>
       <label>Tid over grænse (min)<input type="number" id="time-limit" value="5"></label>
     </div>
-    <button onclick="requestPermissions()">Tillad Notifikationer</button>
-
-    <!-- Tids-Slider -->
-    <div class="slider-container">
-      <h3 style="margin-bottom: 5px;">Graf Historik</h3>
-      <label style="font-weight: bold; color: #555;">
-        Viser data for de seneste <span id="hours-display" style="color: #3498db; font-size: 1.2em;">4 timer</span>
-      </label>
-      <br>
-      <input type="range" id="time-slider" min="0" max="19" value="3">
-    </div>
-  </div>
-
-  <!-- Gennemsnitsberegner (Visuel drag-and-drop info) -->
-  <div class="settings-card">
-    <h3>Beregn Gennemsnit</h3>
-    <p style="color: #666; font-size: 0.95em; margin-bottom: 10px;">
-      Markér et område direkte på en af graferne nedenfor (klik og træk med musen) for at se gennemsnittet for det interval. 
-      <br><span style="font-size: 0.85em;">(Klik én gang på grafen for at fjerne markeringen igen).</span>
-    </p>
-    
-    <div id="calc-status" style="font-size: 0.9em; color: #3498db; margin-bottom: 5px;">Klar til markering...</div>
-    
-    <div class="avg-results" id="avg-results">
-      <div class="avg-item"><span class="lbl">CO2</span><span class="v" id="avg-co2">-- ppm</span></div>
-      <div class="avg-item"><span class="lbl">Temp</span><span class="v" id="avg-temp">-- °C</span></div>
-      <div class="avg-item"><span class="lbl">Fugt</span><span class="v" id="avg-hum">-- %</span></div>
-    </div>
-  </div>
-
-  <!-- Grafer -->
-  <div class="charts-grid">
-    <div class="chart-box"><canvas id="co2Chart"></canvas></div>
-    <div class="chart-box"><canvas id="tempChart"></canvas></div>
-    <div class="chart-box"><canvas id="humChart"></canvas></div>
+    <button onclick="requestPermissions()" style="margin-bottom: 0;">Tillad Notifikationer</button>
   </div>
 
   <script>
-    // 1. Firebase Opsætning
     const firebaseConfig = {
       apiKey: "AIzaSyCqEJ5yRtTB1KjAG0RmnEsDNiXFJBKwUxo",
       authDomain: "tempco2fugt.firebaseapp.com",
@@ -111,16 +138,65 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // Slet alt data ældre end 7 dage automatisk
     const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
     db.ref('klima').orderByChild('timestamp').endAt(oneWeekAgo).once('value', (snapshot) => {
       snapshot.forEach((child) => child.ref.remove());
     });
 
-    // 2. Notifikations-logik
+    async function fetchOutdoorClimate() {
+      try {
+        // Henter vejrdata for Danmark/Aalborg-området. (Open-Meteo bruger Yr.no/Met.no & DWD data og tillader web-kald uden API-nøgle)
+        const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=57.048&longitude=9.9187&current_weather=true');
+        const data = await response.json();
+        
+        const outTemp = data.current_weather.temperature;
+        document.getElementById('out-temp-val').innerHTML = outTemp.toFixed(1) + " &deg;C";
+        
+        calculateRecommendedHumidity(outTemp);
+      } catch (error) {
+        console.error("Kunne ikke hente udendørs temperatur", error);
+        document.getElementById('out-temp-val').innerText = "Fejl";
+        document.getElementById('rec-hum-val').innerText = "--";
+        document.getElementById('rec-hum-reason').innerText = "Vejrdata utilgængelig";
+      }
+    }
+
+    // Udregner det ideelle RF interval baseret på udetemperaturen
+    function calculateRecommendedHumidity(outTemp) {
+      let recHum = "";
+      let reason = "";
+      
+      if (outTemp <= -5) {
+        recHum = "30 - 40%";
+        reason = "Frost: Hold fugten lav";
+      } else if (outTemp > -5 && outTemp <= 5) {
+        recHum = "35 - 45%";
+        reason = "Koldt: Undgå kondens";
+      } else if (outTemp > 5 && outTemp <= 15) {
+        recHum = "40 - 50%";
+        reason = "Køligt vejr";
+      } else {
+        recHum = "40 - 60%";
+        reason = "Lunt/Varmt vejr";
+      }
+      
+      document.getElementById('rec-hum-val').innerText = recHum;
+      document.getElementById('rec-hum-reason').innerText = reason;
+    }
+
+    // Opdater udendørs data nu og derefter hver halve time
+    fetchOutdoorClimate();
+    setInterval(fetchOutdoorClimate, 30 * 60 * 1000);
+
     function requestPermissions() {
-      if (!("Notification" in window)) alert("Din browser understøtter ikke notifikationer.");
-      else Notification.requestPermission().then(p => { if (p === "granted") alert("Aktivt!"); });
+      if (!("Notification" in window)) {
+        // Erstat alert med en pænere besked i konsollen/UI (undgår browser popups)
+        console.warn("Din browser understøtter ikke notifikationer.");
+      } else {
+        Notification.requestPermission().then(p => { 
+          if (p === "granted") console.log("Notifikationer er aktive!"); 
+        });
+      }
     }
 
     let exceedStart = { co2: null, temp: null, hum: null };
@@ -132,14 +208,15 @@
         else {
           let mins = (timestamp - exceedStart[type]) / 60000;
           if (mins >= timeLimitMin && !hasNotified[type]) {
-            if (Notification.permission === "granted") new Notification(`Alarm: Høj ${type}!`, { body: `Målingen over ${maxLimit} ${unit} i over ${timeLimitMin} min. Nu: ${currentValue} ${unit}.`});
+            if (Notification.permission === "granted") {
+              new Notification(`Alarm: Høj ${type}!`, { body: `Målingen over ${maxLimit} ${unit} i over ${timeLimitMin} min. Nu: ${currentValue} ${unit}.`});
+            }
             hasNotified[type] = true;
           }
         }
       } else { exceedStart[type] = null; hasNotified[type] = false; }
     }
 
-    // 3. Custom Chart.js Plugin til at tegne den blå markering
     const selectionBoxPlugin = {
       id: 'selectionBox',
       afterDraw(chart) {
@@ -150,13 +227,12 @@
           const x1 = Math.min(chart.selection.startX, chart.selection.endX);
           const x2 = Math.max(chart.selection.startX, chart.selection.endX);
 
-          // Sørg for at den blå boks ikke tegnes uden for selve grafens gitter
           const drawX1 = Math.max(x1, chart.chartArea.left);
           const drawX2 = Math.min(x2, chart.chartArea.right);
 
           if (drawX2 > drawX1) {
             ctx.save();
-            ctx.fillStyle = 'rgba(52, 152, 219, 0.3)'; // Lyseblå gennemsigtig farve
+            ctx.fillStyle = 'rgba(52, 152, 219, 0.3)';
             ctx.fillRect(drawX1, yTop, drawX2 - drawX1, yBottom - yTop);
             ctx.restore();
           }
@@ -169,7 +245,7 @@
         type: 'line',
         data: { labels: [], datasets: [{ label: label, data: [], borderColor: color, backgroundColor: color + '33', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
         options: { responsive: true, animation: false, scales: { y: { beginAtZero: false } } },
-        plugins: [selectionBoxPlugin] // Tilføj vores nye tegne-værktøj
+        plugins: [selectionBoxPlugin]
       });
     }
 
@@ -177,7 +253,6 @@
     const tempChart = createChart(document.getElementById('tempChart').getContext('2d'), 'Temperatur (°C)', '#3498db');
     const humChart = createChart(document.getElementById('humChart').getContext('2d'), 'Luftfugtighed (%)', '#2ecc71');
 
-    // 4. Logik for træk-og-slip udregning
     function calculateAverageFromSelection(activeChart) {
       if (!activeChart.selection) return;
 
@@ -185,15 +260,14 @@
       const x1 = Math.min(activeChart.selection.startX, activeChart.selection.endX);
       const x2 = Math.max(activeChart.selection.startX, activeChart.selection.endX);
 
-      // Hvis brugeren bare klikkede (næsten ingen bredde på boksen), rydder vi markeringen
       if (Math.abs(x2 - x1) < 10) {
         [co2Chart, tempChart, humChart].forEach(c => { c.selection = null; c.update('none'); });
         document.getElementById('avg-results').style.display = "none";
-        document.getElementById('calc-status').innerText = "Klar til markering...";
+        document.getElementById('calc-status').style.display = "block";
+        document.getElementById('calc-status').innerText = "Markér et område direkte på en graf (klik og træk) for at se gennemsnittet for intervallet.";
         return;
       }
 
-      // Oversæt pixels til data-indeks (hvor i rækken af målinger er vi?)
       const startIndex = Math.max(0, Math.floor(scale.getValueForPixel(x1)));
       const endIndex = Math.min(activeChart.data.labels.length - 1, Math.ceil(scale.getValueForPixel(x2)));
 
@@ -201,22 +275,19 @@
         let sumCo2 = 0, sumTemp = 0, sumHum = 0;
         let count = endIndex - startIndex + 1;
 
-        // Læg alle valgte målinger sammen
         for (let i = startIndex; i <= endIndex; i++) {
           sumCo2 += co2Chart.data.datasets[0].data[i] || 0;
           sumTemp += tempChart.data.datasets[0].data[i] || 0;
           sumHum += humChart.data.datasets[0].data[i] || 0;
         }
 
-        // Vis resultatet
         document.getElementById('avg-co2').innerText = Math.round(sumCo2 / count) + " ppm";
         document.getElementById('avg-temp').innerText = (sumTemp / count).toFixed(1) + " °C";
         document.getElementById('avg-hum').innerText = Math.round(sumHum / count) + " %";
         
-        document.getElementById('calc-status').innerText = `Beregnet ud fra ${count} målinger i det valgte område.`;
+        document.getElementById('calc-status').style.display = "none";
         document.getElementById('avg-results').style.display = "flex";
         
-        // Kopier den lyseblå boks til de to andre grafer, så de synkroniserer
         [co2Chart, tempChart, humChart].forEach(c => {
           if (c !== activeChart) {
             c.selection = { startX: activeChart.selection.startX, endX: activeChart.selection.endX };
@@ -226,7 +297,6 @@
       }
     }
 
-    // Gør lærredet i stand til at lytte efter mus og fingre
     function setupDragSelection(canvasId, chartObj) {
       const canvas = document.getElementById(canvasId);
       let isDragging = false;
@@ -257,7 +327,7 @@
       canvas.addEventListener('mousedown', startDrag);
       canvas.addEventListener('mousemove', doDrag);
       canvas.addEventListener('mouseup', endDrag);
-      canvas.addEventListener('mouseleave', endDrag); // Sørg for at den stopper, hvis musen kører udenfor
+      canvas.addEventListener('mouseleave', endDrag);
 
       canvas.addEventListener('touchstart', startDrag, {passive: true});
       canvas.addEventListener('touchmove', doDrag, {passive: true});
@@ -268,7 +338,6 @@
     setupDragSelection('tempChart', tempChart);
     setupDragSelection('humChart', humChart);
 
-    // 5. Data Håndtering & Slider Logik
     let currentListener = null;
     let updateTimeout;
 
@@ -293,10 +362,10 @@
       tempChart.data.labels = []; tempChart.data.datasets[0].data = [];
       humChart.data.labels = []; humChart.data.datasets[0].data = [];
       
-      // Ryd eventuelle markeringer, når ny tid vælges
       [co2Chart, tempChart, humChart].forEach(c => { c.selection = null; });
       document.getElementById('avg-results').style.display = "none";
-      document.getElementById('calc-status').innerText = "Klar til markering...";
+      document.getElementById('calc-status').style.display = "block";
+      document.getElementById('calc-status').innerText = "Markér et område direkte på en graf (klik og træk) for at se gennemsnittet for intervallet.";
 
       const startTime = Date.now() - (hours * 60 * 60 * 1000);
 
