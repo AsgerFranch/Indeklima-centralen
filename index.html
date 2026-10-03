@@ -19,8 +19,6 @@
     
     /* Fremhævede kort til udendørs data og anbefalinger */
     .card.outdoor { background: #e3f2fd; border: 1px solid #bbdefb; }
-    .card.recommended { background: #e8f5e9; border: 1px solid #c8e6c9; }
-    .card.recommended .val { font-size: 1.8em; color: #2e7d32; }
     
     .settings-card { background: white; padding: 20px; border-radius: 12px; max-width: 800px; margin: 0 auto 30px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     .input-group { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; align-items: center; margin-bottom: 15px; }
@@ -65,18 +63,26 @@
   <div class="cards">
     <div class="card"><h3>CO2 Niveau</h3><div class="val" id="co2-val">-- ppm</div></div>
     <div class="card"><h3>Temp (Inde)</h3><div class="val" id="temp-val">-- &deg;C</div></div>
-    <div class="card"><h3>Fugt (Inde)</h3><div class="val" id="hum-val">-- %</div></div>
-    
-    <!-- Nye kort til udendørs API data og anbefalet RF -->
-    <div class="card outdoor">
-      <h3>Udendørs Temp</h3>
-      <div class="val" id="out-temp-val">-- &deg;C</div>
-      <div style="font-size: 0.7em; color: #555; margin-top: 5px;">Kilde: Yr.no/Meteo</div>
+    <div class="card">
+      <h3>Fugt (Inde)</h3>
+      <div class="val" id="hum-val">-- %</div>
+      <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+        Anbefalet: <span id="rec-hum-val" style="font-weight: bold; color: #2e7d32;">-- %</span>
+      </div>
     </div>
-    <div class="card recommended">
-      <h3>Anbefalet Indefugt</h3>
-      <div class="val" id="rec-hum-val">-- %</div>
-      <div style="font-size: 0.7em; color: #555; margin-top: 5px;" id="rec-hum-reason">Beregner...</div>
+    
+    <!-- Nyt samlet kort til udendørs API data -->
+    <div class="card outdoor">
+      <h3 style="margin-bottom: 12px; font-size: 1.05em;">Udendørs</h3>
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px;">
+        <span style="font-size: 0.85em; color: #555;">Temp:</span>
+        <span style="font-size: 1.3em; font-weight: bold; color: #2c3e50;" id="out-temp-val">-- &deg;C</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <span style="font-size: 0.85em; color: #555;">Fugt:</span>
+        <span style="font-size: 1.3em; font-weight: bold; color: #2c3e50;" id="out-hum-val">-- %</span>
+      </div>
+      <div style="font-size: 0.75em; color: #666; margin-top: 10px; border-top: 1px solid #bbdefb; padding-top: 5px;" id="rec-hum-reason">Henter data...</div>
     </div>
   </div>
 
@@ -145,17 +151,21 @@
 
     async function fetchOutdoorClimate() {
       try {
-        // Henter vejrdata for Danmark/Aalborg-området. (Open-Meteo bruger Yr.no/Met.no & DWD data og tillader web-kald uden API-nøgle)
-        const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=57.048&longitude=9.9187&current_weather=true');
+        // Henter vejrdata for Danmark/Aalborg-området inklusiv luftfugtighed.
+        const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=57.048&longitude=9.9187&current=temperature_2m,relative_humidity_2m');
         const data = await response.json();
         
-        const outTemp = data.current_weather.temperature;
+        const outTemp = data.current.temperature_2m;
+        const outHum = data.current.relative_humidity_2m;
+        
         document.getElementById('out-temp-val').innerHTML = outTemp.toFixed(1) + " &deg;C";
+        document.getElementById('out-hum-val').innerHTML = outHum + " %";
         
         calculateRecommendedHumidity(outTemp);
       } catch (error) {
-        console.error("Kunne ikke hente udendørs temperatur", error);
+        console.error("Kunne ikke hente udendørs vejrdata", error);
         document.getElementById('out-temp-val').innerText = "Fejl";
+        if (document.getElementById('out-hum-val')) document.getElementById('out-hum-val').innerText = "--";
         document.getElementById('rec-hum-val').innerText = "--";
         document.getElementById('rec-hum-reason').innerText = "Vejrdata utilgængelig";
       }
