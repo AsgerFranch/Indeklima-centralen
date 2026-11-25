@@ -7,6 +7,7 @@
   
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   
   <style>
@@ -55,11 +56,60 @@
     @media (max-width: 600px) {
       .avg-title { border-right: none; padding-right: 0; border-bottom: 2px solid #ddd; padding-bottom: 5px; width: 100%; text-align: center; }
     }
+
+    /* Login overlay & header bar */
+    .top-bar { display: flex; justify-content: center; align-items: center; position: relative; max-width: 1200px; margin: 0 auto 20px auto; flex-wrap: wrap; gap: 10px; }
+    .top-bar h1 { margin: 0; }
+    .auth-controls { position: absolute; right: 0; display: flex; align-items: center; gap: 10px; font-size: 0.85em; color: #555; }
+    .logout-btn { padding: 7px 14px; background: #fff; color: #333; border: 1px solid #d0d7de; margin: 0; font-size: 0.85em; }
+    .logout-btn:hover { background: #f3f4f6; }
+    @media (max-width: 720px) {
+      .auth-controls { position: static; width: 100%; justify-content: center; }
+    }
+    .auth-wrap { min-height: 85vh; display: flex; align-items: center; justify-content: center; }
+    .auth-card { background: white; padding: 28px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); width: 100%; max-width: 380px; text-align: left; }
+    .auth-card h2 { margin: 0 0 6px 0; color: #2c3e50; font-size: 1.35em; }
+    .auth-card p { margin: 0 0 18px 0; color: #666; font-size: 0.9em; }
+    .auth-field { display: flex; flex-direction: column; margin-bottom: 14px; font-size: 0.88em; font-weight: 600; color: #444; }
+    .auth-field input { margin-top: 5px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
+    .auth-submit { width: 100%; background: #3498db; margin-bottom: 0; }
+    .auth-submit:hover { background: #2980b9; }
+    .auth-error { display: none; background: #fdecec; color: #b8332a; border: 1px solid #f5c6cb; border-radius: 6px; padding: 9px 12px; font-size: 0.85em; margin-bottom: 12px; }
+    .access-banner { display: none; background: #fdecec; color: #b8332a; border: 1px solid #f5c6cb; border-radius: 8px; padding: 10px 14px; max-width: 800px; margin: 0 auto 20px auto; font-size: 0.92em; font-weight: 600; }
   </style>
 </head>
 <body>
 
-  <h1>Indeklima Dashboard</h1>
+  <div id="loading-view" style="padding: 60px 20px; color: #666; font-weight: 600;">Forbinder til Indeklima-centralen...</div>
+
+  <div id="auth-view" class="auth-wrap" style="display: none;">
+    <div class="auth-card">
+      <h2>Indeklima Dashboard</h2>
+      <p>Log ind med din Firebase-konto for at se klimadata.</p>
+      <div id="auth-error" class="auth-error"></div>
+      <form id="auth-form">
+        <label class="auth-field">
+          E-mail
+          <input type="email" id="auth-email" required autocomplete="email" placeholder="din@email.dk">
+        </label>
+        <label class="auth-field">
+          Adgangskode
+          <input type="password" id="auth-password" required autocomplete="current-password" placeholder="••••••••">
+        </label>
+        <button type="submit" id="auth-submit-btn" class="auth-submit">Log ind</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-shell" style="display: none;">
+    <div class="top-bar">
+      <h1>Indeklima Dashboard</h1>
+      <div class="auth-controls">
+        <span id="user-email-label"></span>
+        <button type="button" id="logout-btn" class="logout-btn">Log ud</button>
+      </div>
+    </div>
+    <div id="access-banner" class="access-banner"></div>
   
   <!-- Live Data & Udendørs Info -->
   <div class="cards">
@@ -139,6 +189,7 @@
     </div>
     <button onclick="requestPermissions()" style="margin-bottom: 0;">Tillad Notifikationer</button>
   </div>
+  </div>
 
   <script>
     const firebaseConfig = {
@@ -152,12 +203,20 @@
       measurementId: "G-RS8FZC7W4Z"
     };
     firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
     const db = firebase.database();
 
-    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    db.ref('klima').orderByChild('timestamp').endAt(oneWeekAgo).once('value', (snapshot) => {
-      snapshot.forEach((child) => child.ref.remove());
-    });
+    let activeUser = null;
+    let weatherInterval = null;
+
+    function pruneOldClimateData() {
+      const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      db.ref('klima').orderByChild('timestamp').endAt(oneWeekAgo).once('value', (snapshot) => {
+        snapshot.forEach((child) => {
+          child.ref.remove().catch(() => {});
+        });
+      }, () => {});
+    }
 
     let latestIndoorTemp = null;
     let latestIndoorTimestamp = -Infinity;
@@ -341,9 +400,7 @@
       document.getElementById('rec-hum-reason').innerText = reason;
     }
 
-    // Opdater udendørs data nu og derefter hver halve time
-    fetchOutdoorClimate();
-    setInterval(fetchOutdoorClimate, 30 * 60 * 1000);
+    // Opdater udendørs data startes efter login (se onAuthStateChanged)
 
     function requestPermissions() {
       if (!("Notification" in window)) {
@@ -513,7 +570,11 @@
     }
 
     function loadData(hours) {
+      if (!activeUser) return;
       if (currentListener) db.ref('klima').off('child_added', currentListener);
+
+      const accessBanner = document.getElementById('access-banner');
+      accessBanner.style.display = 'none';
 
       co2Chart.data.labels = []; co2Chart.data.datasets[0].data = [];
       tempChart.data.labels = []; tempChart.data.datasets[0].data = [];
@@ -561,6 +622,10 @@
         }
 
         debouncedUpdate();
+      }, (err) => {
+        console.error('Indeklima RTDB fejl:', err);
+        accessBanner.innerText = 'Ingen adgang til klimadata – log ind med den autoriserede Firebase-konto.';
+        accessBanner.style.display = 'block';
       });
     }
 
@@ -572,7 +637,66 @@
       loadData(sliderSteps[e.target.value]);
     });
 
-    loadData(4);
+    const loadingViewEl = document.getElementById('loading-view');
+    const authViewEl = document.getElementById('auth-view');
+    const appShellEl = document.getElementById('app-shell');
+    const authErrorEl = document.getElementById('auth-error');
+    const authSubmitBtn = document.getElementById('auth-submit-btn');
+
+    document.getElementById('auth-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      if (!email || !password) return;
+
+      authErrorEl.style.display = 'none';
+      authSubmitBtn.disabled = true;
+      authSubmitBtn.innerText = 'Logger ind...';
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        const msg = error?.code === 'auth/too-many-requests'
+          ? 'For mange forsøg. Prøv igen om lidt.'
+          : 'Forkert e-mail eller adgangskode.';
+        authErrorEl.innerText = msg;
+        authErrorEl.style.display = 'block';
+      } finally {
+        authSubmitBtn.disabled = false;
+        authSubmitBtn.innerText = 'Log ind';
+      }
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => auth.signOut());
+
+    auth.onAuthStateChanged((user) => {
+      loadingViewEl.style.display = 'none';
+      if (user) {
+        activeUser = user;
+        authViewEl.style.display = 'none';
+        appShellEl.style.display = 'block';
+        document.getElementById('user-email-label').innerText = user.email || '';
+        pruneOldClimateData();
+        fetchOutdoorClimate();
+        if (!weatherInterval) {
+          weatherInterval = setInterval(fetchOutdoorClimate, 30 * 60 * 1000);
+        }
+        loadData(sliderSteps[timeSlider.value]);
+      } else {
+        activeUser = null;
+        latestIndoorTemp = null;
+        latestIndoorTimestamp = -Infinity;
+        if (currentListener) {
+          db.ref('klima').off('child_added', currentListener);
+          currentListener = null;
+        }
+        if (weatherInterval) {
+          clearInterval(weatherInterval);
+          weatherInterval = null;
+        }
+        appShellEl.style.display = 'none';
+        authViewEl.style.display = 'flex';
+      }
+    });
   </script>
 </body>
 </html>
