@@ -208,13 +208,19 @@
 
     let activeUser = null;
     let weatherInterval = null;
+    let pruneTimer = null;
 
     function pruneOldClimateData() {
+      if (!activeUser) return;
       const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-      db.ref('klima').orderByChild('timestamp').endAt(oneWeekAgo).once('value', (snapshot) => {
+      db.ref('klima').orderByChild('timestamp').endAt(oneWeekAgo).limitToFirst(500).once('value', (snapshot) => {
+        const removals = {};
         snapshot.forEach((child) => {
-          child.ref.remove().catch(() => {});
+          removals[child.key] = null;
         });
+        if (Object.keys(removals).length > 0) {
+          db.ref('klima').update(removals).catch(() => {});
+        }
       }, () => {});
     }
 
@@ -675,14 +681,17 @@
         authViewEl.style.display = 'none';
         appShellEl.style.display = 'block';
         document.getElementById('user-email-label').innerText = user.email || '';
-        pruneOldClimateData();
+        [co2Chart, tempChart, humChart].forEach((c) => c.resize());
         fetchOutdoorClimate();
         if (!weatherInterval) {
           weatherInterval = setInterval(fetchOutdoorClimate, 30 * 60 * 1000);
         }
         loadData(sliderSteps[timeSlider.value]);
+        clearTimeout(pruneTimer);
+        pruneTimer = setTimeout(pruneOldClimateData, 3000);
       } else {
         activeUser = null;
+        clearTimeout(pruneTimer);
         latestIndoorTemp = null;
         latestIndoorTimestamp = -Infinity;
         if (currentListener) {
